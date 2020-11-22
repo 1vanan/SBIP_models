@@ -1,0 +1,259 @@
+package attackdns
+
+	const data int fake_address = 33333
+	const data int user_money = 33333
+
+	port type Port()
+	port type Port1Data( int address)
+	port type Port2Data( bool success, int address )
+	port type Port2Data2( int address, float money )
+
+	 /*
+	  * connectors
+	  */	
+	connector type ConnectAll(Port p1, Port p2, Port p3, Port p4, Port p5)
+		define p1 p2 p3 p4 p5
+	end
+
+	connector type Connect3(Port p1, Port p2, Port p3)
+		define p1 p2 p3
+	end
+
+	connector type UpdateCache( Port2Data ad, Port2Data cache)
+		define ad cache
+		on ad cache down {if (ad.success) then cache.address = ad.address; fi  }
+	end
+
+	connector type ExchangeAddress( Port1Data user, Port1Data cache)
+		define user cache
+		on user cache down { user.address = cache.address;}
+	end
+
+
+	connector type TransferMoney(Port2Data2 user, Port2Data2 b_network, Port2Data2 ad_network)
+		define user b_network ad_network
+		on user b_network ad_network down {if (user.address == ad_network.address) then ad_network.money = user_money;  user.money = 0; else  ad_network.money = user.money/10;  user.money = user.money * 0.9; fi  }
+	end
+
+	atom type User()
+		// Data variables
+  		data int received_address // network address
+  		data float money = 1000 // network address
+		data bool connected
+		data bool false_network
+		data bool isDone
+
+		// Instantiate clocks
+		clock x unit nanosecond
+
+		// Exported ports
+  		export port Port  hear()
+  		export port Port1Data  address(received_address)
+		export port Port  hear_network()
+		export port Port connect()
+		export port Port done()
+		export port Port2Data2 transfer_money(received_address, money)
+
+		// Locations
+  		place u0, u1, u2, u3, u4
+
+		// Initial location declarations
+		initial to u0 do {  connected = false; false_network = false;}
+
+		// Transitions
+  		on hear     from u0  to u0  
+		delayable 
+		do { false_network = (received_address == fake_address); }
+
+  		on address     from u0  to u1  
+		delayable 
+		do {  false_network = (received_address == fake_address); }
+
+  		on hear     from u1  to u1  
+		delayable 
+		do {  false_network = (received_address == fake_address); }
+
+
+  		on address     from u1  to u2  
+		delayable 
+		do { isDone = false; }
+
+  		on hear_network from u2  to u2  
+		delayable 
+		do { false_network = (received_address == fake_address); }
+
+
+  		on connect from u2  to u3  
+		delayable 
+		do { connected = true; }
+
+  		on done from u3  to u3  
+		delayable 
+		do { isDone = true;}
+
+  		on transfer_money from u3  to u4  
+		delayable 
+		do { isDone = true;}
+
+  		on done from u4  to u4  
+		delayable 
+		do { isDone = true;}
+	end
+
+	atom type Attacker()
+		// Data variables
+  		data int fake_address
+		data bool success
+
+		// Instantiate clocks
+		clock x unit nanosecond
+
+		// Exported ports
+  		export port Port  check_success()
+		export port Port2Data update_cache(success, fake_address) 
+
+		// Locations
+  		place a0, a1
+
+		// Initial location declarations
+		initial to a0 do {  success = false;}
+
+		// Transitions
+  		on check_success   from a0  to a1  
+		delayable 
+		do { success  = false; }
+
+		@stochastic(dist="normal", clk=x, param="10,2")
+  		on update_cache  from a1  to a0  
+		delayable 
+		do {success = true; }
+	end
+
+	atom type DNSCache()
+		// Data variables
+  		data int send_address
+		data bool connected
+		data bool attacked 
+
+		// Instantiate clocks
+		clock x unit nanosecond
+
+		// Exported ports
+		export port Port2Data update_cache (attacked, send_address) 
+		export port Port  hear()
+		export port Port1Data  address(send_address)
+
+		// Locations
+  		place c0, c1, c2
+
+		// Initial location declarations
+		initial to c0 do {  connected = false;}
+
+		// Transitions
+  		on update_cache     from c0 to c1  
+		delayable 
+		do { send_address = 77777; }
+
+  		on address     from c0 to c2  
+		delayable 
+		do { send_address = 77777; }
+
+  		on hear     from c1  to c0  
+		delayable 
+		do { attacked =(send_address == fake_address); }
+
+  		on hear     from c2  to c0  
+		delayable 
+		do { attacked =(send_address == fake_address); }
+	end
+
+	atom type BitcoinNetwork()
+		// Data variables
+  		data int cur_address	// network address
+		data bool connected
+		data bool adversary
+		data float money
+
+		// Instantiate clocks
+		clock x unit nanosecond
+
+		// Exported ports
+  		export port Port  hear_network()
+  		export port Port  connect()
+		export port Port2Data2  transfer(cur_address, money)
+
+		// Locations
+  		place bn0, bn1
+
+		// Initial location declarations
+		initial to bn0 do {  connected = false; cur_address = 33333; money = 0; adversary = false;}
+
+		// Transitions
+  		on hear_network     from bn0  to bn0  
+		delayable 
+		do { connected = false; }
+
+  		on connect     from bn0  to bn1  
+		delayable 
+		do { connected = true; }
+
+  		on transfer     from bn1  to bn0  
+		delayable 
+		do { connected = false; }
+
+	end
+
+	atom type AttackerNetwork()
+		// Data variables
+  		data int cur_address// network address
+		data bool connected
+		data bool adversary
+		data float money
+
+		// Instantiate clocks
+		clock x unit nanosecond
+
+		// Exported ports
+		export port Port  hear_network()
+  		export port Port  connect()
+  		export port Port2Data2  transfer(cur_address, money)
+		// Locations
+  		place an0, an1
+
+		// Initial location declarations
+		initial to an0 do {  connected = false; cur_address = 99999; money = 0; adversary = true;}
+		// Transitions
+  		on hear_network     from an0  to an0  
+		delayable 
+		do { connected = false; }
+
+  		on connect     from an0  to an1  
+		delayable 
+		do { connected = true; }
+
+  		on transfer     from an1  to an0  
+		delayable 
+		do { connected = false; }
+	end
+
+
+	// Compound types definitions
+	compound type Compound()
+		component User user()
+		component Attacker  attacker()
+		component DNSCache cache()
+		component BitcoinNetwork bit_network() 
+		component AttackerNetwork attack_network()
+
+		connector Connect3  start1(user.hear, attacker.check_success, cache.hear)
+		connector UpdateCache update1(attacker.update_cache, cache.update_cache)
+		connector ExchangeAddress  exchange1(user.address, cache.address)
+
+		connector Connect3  start2(user.hear, attacker.check_success, cache.hear)
+		connector UpdateCache update2(attacker.update_cache, cache.update_cache)
+		connector ExchangeAddress exchange2(user.address, cache.address)
+
+		connector TransferMoney transfer(user.transfer_money, bit_network.transfer, attack_network.transfer)
+
+	end
+end
