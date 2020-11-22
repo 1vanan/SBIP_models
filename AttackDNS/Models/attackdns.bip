@@ -1,0 +1,232 @@
+package attackdns
+
+	port type Port()
+
+	 /*
+	  * connectors
+	  *
+	  */	
+	connector type ConnectStart(Port p1, Port p2, Port p3, Port p4, Port p5)
+		define p1 p2 p3 p4 p5
+	end
+
+	connector type Connect(Port p1, Port p2, Port p3, Port p4)
+		define p1 p2 p3 p4
+	end
+
+	atom type User()
+		// Data variables
+  		data int received_address // network address
+  		data int money = 1000 // network address
+		data bool connected
+		data bool false_network
+		data bool isDone
+
+		// Instantiate clocks
+		clock x unit nanosecond
+
+		// Exported ports
+  		export port Port  hear()
+  		export port Port  address()
+		export port Port  hear_network()
+		export port Port connect()
+		export port Port done()
+		export port Port transfer_money()
+
+		// Locations
+  		place u0, u1, u2, u3, u4
+
+		// Initial location declarations
+		initial to u0 do {  connected = false;}
+
+		// Transitions
+  		on hear     from u0  to u0  
+		delayable 
+		do { received_address = 7; }
+
+  		on address     from u0  to u1  
+		delayable 
+		do { received_address = 5; }
+
+  		on hear     from u1  to u1  
+		delayable 
+		do { received_address = 7; }
+
+
+  		on address     from u1  to u2  
+		delayable 
+		do { received_address = 5; }
+
+  		on hear_network from u2  to u2  
+		delayable 
+		do { connected = true; false_network = false; }
+
+
+  		on connect from u2  to u3  
+		delayable 
+		do { connected = true; false_network = false; }
+
+  		on done from u3  to u3  
+		delayable 
+		do { isDone = true;}
+
+  		on transfer_money from u3  to u4  
+		delayable 
+		do { money = 0;}
+
+  		on done from u4  to u4  
+		delayable 
+		do { isDone = true;}
+	end
+
+	atom type Attacker()
+		// Data variables
+  		data int received_address	// received address
+		data bool success
+
+		// Instantiate clocks
+		clock x unit nanosecond
+
+		// Exported ports
+  		port Port  check_success()
+		export port Port  update_cache()
+
+		// Locations
+  		place a0, a1
+
+		// Initial location declarations
+		initial to a0 do {  success = false;}
+
+		// Transitions
+  		on check_success   from a0  to a1  
+		delayable 
+		do { success = true; }
+
+  		on update_cache  from a1  to a0  
+		delayable 
+		do { received_address = 0; }
+	end
+
+	atom type DNSCache()
+		// Data variables
+  		data int send_address	// send address
+		data bool connected
+
+		// Instantiate clocks
+		clock x unit nanosecond
+
+		// Exported ports
+  		export port Port  update_cache()
+		export port Port  hear()
+		export port Port  address()
+
+		// Locations
+  		place c0, c1, c2
+
+		// Initial location declarations
+		initial to c0 do {  connected = false;}
+
+		// Transitions
+  		on update_cache     from c0 to c1  
+		delayable 
+		do { send_address = 7; }
+
+  		on address     from c0 to c2  
+		delayable 
+		do { send_address = 7; }
+
+  		on hear     from c1  to c0  
+		delayable 
+		do { send_address = 5; }
+
+  		on hear     from c2  to c0  
+		delayable 
+		do { send_address = 5; }
+	end
+
+	atom type BitcoinNetwork()
+		// Data variables
+  		data int cur_address	// network address
+		data bool connected
+
+		// Instantiate clocks
+		clock x unit nanosecond
+
+		// Exported ports
+  		export port Port  connect()
+		export port Port  hear_network()
+		export port Port  done()
+
+		// Locations
+  		place bn0, bn1
+
+		// Initial location declarations
+		initial to bn0 do {  connected = false;}
+
+		// Transitions
+  		on hear_network     from bn0  to bn1  
+		delayable 
+		do { cur_address = 5; }
+
+  		on connect     from bn1  to bn0  
+		delayable 
+		do { cur_address = 7; }
+
+  		on done     from bn0  to bn0  
+		delayable 
+		do { cur_address = 7; }
+
+	end
+
+	atom type AttackerNetwork()
+		// Data variables
+  		data int cur_address// network address
+		data bool connected
+
+		// Instantiate clocks
+		clock x unit nanosecond
+
+		// Exported ports
+		export port Port  hear_network()
+  		export port Port  connect()
+  		export port Port  transfer_money()
+		export port Port  done()
+
+		// Locations
+  		place an0, an1, an2
+
+		// Initial location declarations
+		initial to an0 do {  connected = false;}
+
+		// Transitions
+  		on hear_network     from an0  to an0  
+		delayable 
+		do { cur_address = 7; }
+
+  		on connect     from an0  to an1  
+		delayable 
+		do { cur_address = 5; }
+
+  		on transfer_money     from an1  to an2  
+		delayable 
+		do { cur_address = 5; }
+
+  		on done     from an2  to an2  
+		delayable 
+		do { cur_address = 5; }
+	end
+
+
+	// Compound types definitions
+	compound type Compound()
+		component User user()
+		component Attacker  attacker()
+		component DNSCache cache()
+		component BitcoinNetwork bit_network() 
+		component AttackerNetwork attack_network()
+
+		connector ConnectStart  start(user.hear, attacker.update_cache, cache.update_cache, bit_network.hear_network, attack_network.hear_network)
+
+		connector Connect  reply(user.address, cache.hear, bit_network.hear_network, attack_network.hear_network)
+	end
+end
