@@ -1,0 +1,353 @@
+@cpp(src="ext-cpp/proba_helper.cpp",include="proba_helper.hpp")
+
+
+package mempool_flooding
+	extern data type distribution_t
+
+	extern function int select(distribution_t , int)
+	extern function distribution_t init_distribution(string,int)
+	extern function int get_average(distribution_t, int)
+
+	extern function int select_c(distribution_t , int)
+	extern function distribution_t init_distribution_c(string,int)
+
+	extern function int select_d(distribution_t , int)
+	extern function distribution_t init_distribution_d(string,int)
+
+	port type Port()
+	port type Port1Data( int assets)
+  port type Port1Data2( bool consistency)
+	port type Port2Data( bool success, int address )
+	port type Port2Data2( int address, float money )
+
+	 /*
+	  * connectors
+	  */
+
+  connector type PortConnector(Port a, Port b)
+  		define a b
+  end
+
+  connector type Validate(Port1Data2 blockchain, Port1Data2 user)
+      define blockchain user
+      on user blockchain down {user.consistency = blockchain.consistency; }
+  end
+
+  connector type Release(Port1Data adversary, Port1Data2 user)
+      define adversary user
+      on adversary user down {if(user.consistency) then  adversary.assets = adversary.assets + 1; fi}
+  end
+
+
+  	atom type Adversary()
+   		 // Data variables
+      		data int assets
+      		data int t // parameter of the experiment
+
+    		// Instantiate clocks
+    		clock y unit nanosecond
+
+    		// Exported ports
+    		export port Port transaction()
+    		export port Port1Data release(assets)
+
+   		 // Locations
+      		place a0, a1, a2
+
+    		// Initial location declarations
+    		initial to a0 do {y = 0;  assets = 0; t = 990;}
+
+    		// Transitions
+		on transaction from a0 to a1
+		provided (y <  10)
+		delayable
+
+    		on transaction from a1 to a2
+        		provided (y >  t + 10)
+    		delayable
+
+    		on release   from a2  to a2
+    		delayable
+    		do {y = 0;}
+  	end
+
+
+  	atom type UserA()
+   		 // Data variables
+      		data bool validated
+
+    		// Instantiate clocks
+    		clock x unit nanosecond
+
+    		port Port verify()
+   		 // Exported ports
+    		export port Port transaction()
+    		export port Port1Data2 validate(validated)
+    		export port Port mempool()
+    		export port Port1Data2 release(validated)
+
+   		 // Locations
+      		place a0, a1, a2, a3, a4
+
+   		 // Initial location declarations
+   		 initial to a0 do { validated = true;}
+
+    		// Transitions
+      		on transaction     from a0  to a1
+    		delayable
+    		do {x = 0;}
+
+      		on validate     from a1  to a2
+    		delayable
+    		do { x = 0; }
+
+      		on verify     from a2  to a3
+      		provided (validated)
+    		delayable
+    		do { x = 0; }
+
+      		on release     from a2  to a0
+    		delayable
+    		do {  x = 0; }
+
+      		on mempool     from a3  to a4
+    		delayable
+    		do {  x = 0;}
+
+    		on release     from a4  to a0
+  		delayable
+  		do {  x = 0;}
+  	end
+
+	atom type UserB()
+		// Data variables
+      		data bool validated
+
+		// Instantiate clocks
+		clock x unit nanosecond
+
+    		port Port verify()
+		// Exported ports
+    		export port Port transaction()
+    		export port Port1Data2 validate(validated)
+    		export port Port mempool()
+   		export port Port1Data2 release(validated)
+
+		// Locations
+  		place b0, b1, b2, b3, b4
+
+		// Initial location declarations
+		initial to b0 do { validated = true; }
+
+		// Transitions
+  		on transaction     from b0  to b1
+		delayable
+		do {x = 0;}
+
+  		on validate     from b1  to b2
+		delayable
+		do { x = 0; }
+
+  		on verify     from b2  to b3
+      		provided (validated)
+		delayable
+		do { x = 0; }
+
+  		on release     from b2  to b0
+		delayable
+		do {  x = 0; }
+
+  		on mempool     from b3  to b4
+		delayable
+		do {  x = 0;}
+
+    		on release     from b4  to b0
+  		delayable
+  		do {  x = 0;}
+	end
+
+
+	atom type Mempool()
+		// Data variables
+  		data int queue_time // from the probabilistic distribution
+		data distribution_t distrib_mempool // Probabilistic Distribution : modified to suport new proba_helper library
+		data int size_data_mempool			// modification to support new proba_helper library
+
+		// Instantiate clocks
+		clock cl unit nanosecond
+
+		// Exported ports
+    		export port Port mempool()
+		export port Port miner()
+
+		// Locations
+  		place m0, m1
+
+		// Initial location declarations
+		initial to m0 do {	distrib_mempool=init_distribution("dist_mempool_unconfirmed.txt",size_data_mempool); 
+queue_time = select(distrib_mempool,size_data_mempool);  cl = 0; }
+
+		// Transitions
+		on mempool from m0 to m1
+		delayable
+		do {cl = 0; queue_time = select(distrib_mempool,size_data_mempool);}
+
+  		on miner     from m1 to m0
+   	 	provided  (cl == queue_time)
+		do { cl = 0; queue_time = select(distrib_mempool,size_data_mempool);}
+	end
+
+	atom type MinerC()
+		// Data variables
+  		data int mining_time // from the probabilistic distribution
+		data distribution_t distrib_miner // Probabilistic Distribution : modified to suport new proba_helper library
+		data int size_data_miner
+		// Instantiate clocks
+		clock x unit nanosecond
+
+  		port Port  hash()
+  		port Port  done()
+		// Exported ports
+  		export port Port  miner()
+		export port Port  block()
+
+		// Locations
+  		place c0, c1, c2, c3
+
+		// Initial location declarations
+		initial to c0 do {distrib_miner=init_distribution("dist_mining.txt",size_data_miner); 
+mining_time = select(distrib_miner,size_data_miner); x = 0;}
+
+		// Transitions
+  		on miner     from c0  to c1
+		delayable
+		do { x = 0; }
+
+  		on hash     from c1  to c2
+      		provided (x == mining_time)
+		delayable
+		do { x = 0; }
+
+  		on block     from c2  to c3
+		delayable
+		do { x = 0; }
+
+  		on done     from c3  to c3
+		delayable
+		do { x = 0; }
+
+	end
+
+  	atom type MinerD()
+		// Data variables
+  		data int mining_time // from the probabilistic distribution
+		data distribution_t distrib_miner // Probabilistic Distribution : modified to suport new proba_helper library
+		data int size_data_miner
+
+		// Instantiate clocks
+		clock x unit nanosecond
+
+  		port Port  hash()
+  		port Port  done()
+		// Exported ports
+  		export port Port  miner()
+		export port Port  block()
+
+		// Locations
+  		place d0, d1, d2, d3
+
+		// Initial location declarations
+		initial to d0 do {distrib_miner=init_distribution("dist_mining.txt",size_data_miner); 
+mining_time = select(distrib_miner,size_data_miner); x = 0;}
+
+		// Transitions
+  		on miner     from d0  to d1
+		delayable
+		do { x = 0;}
+
+  		on hash     from d1  to d2
+      		provided (x == mining_time)
+		delayable
+		do { x = 0; }
+
+  		on block     from d2  to d3
+		delayable
+		do { x = 0; }
+
+  		on done     from d3  to d3
+		delayable
+		do { x = 0; }
+
+	end
+
+  	atom type Blockchain()
+    		// Data variables
+    		data bool consistency
+
+   		 // Instantiate clocks
+    		clock x unit nanosecond
+
+      		port Port  check()
+   		 // Exported ports
+    		export port Port1Data2  validate(consistency)
+    		export port Port  block()
+
+    		// Locations
+      		place w0, w1, w2
+
+   		 // Initial location declarations
+    		initial to w0 do {consistency = true; x = 0;}
+
+   		 // Transitions
+      		on validate     from w0  to w0
+      		delayable
+      		do { x = 0;}
+
+      		on block    from w0  to w1
+      		delayable
+      		do { x = 0; consistency = false;} // the first block was put into the blockchain
+
+      		on validate     from w1  to w1
+      		delayable
+      		do { x = 0;}
+
+      		on block    from w1  to w2
+      		delayable
+      		do { x = 0; } // the first block was put into the blockchain
+
+      		on validate     from w2  to w2
+      		delayable
+      		do { x = 0;}
+
+  	end
+
+
+	// Compound types definitions
+	compound type Compound()
+    		component Adversary adversary()
+		component UserA userA()
+    		component UserB userB()
+    		component Mempool mempool()
+    		component MinerC minerC()
+    		component MinerD minerD()
+		component Blockchain  blockchain()
+
+    		connector PortConnector transactionToA(adversary.transaction, userA.transaction)
+    		connector Validate validateA(blockchain.validate, userA.validate)
+    		connector PortConnector AToMempool(userA.mempool, mempool.mempool)
+    		connector Release ARelease(adversary.release, userA.release)
+
+    		connector PortConnector AToMiner(mempool.miner, minerC.miner)
+    		connector PortConnector AToBlock(minerC.block, blockchain.block)
+
+
+    		connector PortConnector transactionToB(adversary.transaction, userB.transaction)
+    		connector Validate validateB(blockchain.validate, userB.validate)
+    		connector PortConnector BToMempool(userB.mempool, mempool.mempool)
+    		connector Release BRelease(adversary.release, userB.release)
+
+    		connector PortConnector BToMiner(mempool.miner, minerD.miner)
+    		connector PortConnector BToBlock(minerD.block, blockchain.block)
+
+	end
+end
