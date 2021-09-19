@@ -1,0 +1,113 @@
+package endorsement
+
+	// port types definitions
+	port type Port()
+	port type bPort(bool isCorrupted)
+
+	// connector types definitions
+	connector type SendPolicy(Port p1, Port p2)
+		define p1 p2
+	end
+
+	connector type ReceivePolicy1(bPort senderPort, bPort organisationPort)
+		define senderPort organisationPort	
+		on senderPort organisationPort down {senderPort.isCorrupted = organisationPort.isCorrupted;}
+	end
+
+	atom type Organisation()
+		// instaniate clocks
+		clock x unit nanosecond
+
+		// depends on the corruption probability
+		data bool isCorrupted
+
+		// internal ports
+		port Port corruptedResponse()
+		port Port fairResponse()
+		port Port done()
+
+		// export ports
+		export port Port receivePolicy()
+		export port bPort sendResponse(isCorrupted)
+
+
+		// states of STA
+		place o1, o2, o3, o4, o5
+
+
+		// initial state declaration
+		initial to o1 do {isCorrupted = false; x = 0;}
+
+		// transitions
+		on receivePolicy from o1 to o2
+		delayable
+		do {isCorrupted =true;}
+
+		on corruptedResponse from o2 to o3
+		provided(isCorrupted)
+		delayable
+		do {x = 0;}
+
+		on fairResponse from o2 to o4
+		provided(! isCorrupted)
+		delayable
+		do {x = 0;}
+
+		on sendResponse from o3 to o5
+		delayable
+		do {x = 0;}
+
+		on sendResponse from o4 to o5
+		delayable
+		do {x = 0;}
+
+		on done from o5 to o5
+		delayable
+		do {x = 0;}
+	end
+
+
+
+	atom type Sender()
+		// instaniate clocks
+		clock y unit nanosecond
+
+		data bool isCorrupted1
+
+		// internal ports
+		port Port done()
+
+		// external ports
+		export port Port sendPolicy1()
+		export port bPort receivePolicy1(isCorrupted1)
+
+		// states of STA
+		place s1, s2, s3
+						
+		initial to s1 do {y = 0;}
+
+
+		// transitions
+		on sendPolicy1 from s1 to s2
+		delayable
+		do {y = 0;}
+
+		on receivePolicy1 from s2 to s3
+		delayable
+		do {y = 0;}
+
+		on done from s3 to s3
+		delayable
+		do {y = 0;}
+	end
+
+
+	compound type Compound()
+		component Sender sender()
+		component Organisation organisation1()
+	
+		connector SendPolicy send1(sender.sendPolicy1, organisation1.receivePolicy)
+		connector ReceivePolicy1 receive1(sender.receivePolicy1, organisation1.sendResponse)
+	end
+end
+	
